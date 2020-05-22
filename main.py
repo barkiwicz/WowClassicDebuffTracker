@@ -12,9 +12,10 @@ Expected file format:
 """
 
 max_debuffs = 16
-debug = True
+debug = False
 debuff_list = []
 last_timestamp = 0
+last_push_off_timestamp = 0
 stacking_debuff_list = ["Armor Shatter",
                         "Curse of Elements",
                         "Curse of Shadow",
@@ -290,20 +291,38 @@ def dump_at_timestamp(debuff_data, event):
         if ((i["time"] == event["time"]) and (i["target"] == event["target"])):
             print(" " + i["type"] + " " + i["debuff"] + " on " + i["target"] + " from " + i["source"])
 
-    print("Current debuffs: " + str(len(d["debuffs"])))
+    print("Debuffs before timestamp: " + str(len(d["debuffs"])))
 
     for i in d["debuffs"]:
         remaining_time = get_debuff_duration(i["name"]) + i["start_time"] - event["time"]
-        print(" " + i["name"] + " from " + i["source"] + " (remaining time: {:.3f}".format(remaining_time) + ")")
+        print(" " + i["name"] + " from " + i["source"] + " (added: {:.3f}".format(i["start_time"]) + ", estimated remaining: {:.3f}".format(remaining_time) + ")")
     print("---------------------------------------------------")
 
 def handle_push_off(debuff_data, event):
+    global last_push_off_timestamp
+
+    if (last_push_off_timestamp == event["time"]):
+        return
+
+    last_push_off_timestamp = event["time"]
+    add_found = False
+    delete_found = False
+
+    # search the entries at the current timestamp to see if we have both a delete and add/refresh
+    # if we have both, then one buff has pushed another off
     for i in debuff_data:
-        found = False
-        if ((i["time"] == event["time"]) and not (event_is_delete(i["type"])) and not (i["debuff"] == event["debuff"])):
-            # we found an add and delete
-            dump_at_timestamp(debuff_data, i)
-            break
+        if (i["time"] == event["time"]):
+            if (event_is_delete(i["type"])):
+                delete_found = True
+            elif (event_is_add(i["type"])):
+                add_found = True
+            elif (event_is_refresh(i["type"])):
+                add_found = True
+
+    if ((add_found) and (delete_found)):
+        # we found an add and delete
+        dump_at_timestamp(debuff_data, event)
+
     return
 
 def walk_debuffs(debuff_data):
@@ -321,10 +340,7 @@ def walk_debuffs(debuff_data):
     print("Walking debuffs")
 
     for i in debuff_data:
-        if (event_is_delete(i["type"])):
-            # if this is a delete, we walk through the rest of the events at the same timestamp
-            # - if there was an add or refresh at the same time, we dump the debuff table
-            handle_push_off(debuff_data, i)
+        handle_push_off(debuff_data, i)
         handle_debuff(i)
 
 def dump_debuffs():
