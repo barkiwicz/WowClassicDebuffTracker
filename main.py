@@ -1,56 +1,79 @@
-import argparse, csv, re, pprint
+import argparse, csv, re, pprint, datetime
 
 """
-
 Expected file format:
 
-"Time","Event",""
-"00:00:01.215","Vaelastrasz the Corrupt is afflicted by  Curse of Recklessness  from Hrocdol",""
-"00:00:02.432","Vaelastrasz the Corrupt is afflicted by  Faerie Fire (Feral)  from Bag",""
-"00:00:03.640","Vaelastrasz the Corrupt is afflicted by  Sunder Armor  from Dispholidus",""
+5/21 21:28:35.045  ENCOUNTER_START,664,"Magmadar",9,40,409
+5/21 21:28:36.272  SPELL_AURA_APPLIED,Player-4372-00128F78,"Lilnott-Atiesh",0x40514,0x0,Creature-0-4377-409-22615-11982-000047218A,"Magmadar",0x10a48,0x0,17392,"Faerie Fire (Feral)",0x8,DEBUFF
+5/21 21:28:38.708  SPELL_AURA_REMOVED,Player-4372-00DCB2B5,"Acidberry-Atiesh",0x512,0x0,Creature-0-4377-409-22615-11982-000047218A,"Magmadar",0x10a48,0x0,17937,"Curse of Shadow",0x20,DEBUFF
+5/21 21:28:43.183  SPELL_AURA_REFRESH,Player-4372-0107CF35,"Dispholidus-Atiesh",0x514,0x0,Creature-0-4377-409-22615-11982-000047218A,"Magmadar",0x10a48,0x0,12721,"Deep Wound",0x1,DEBUFF
 
 """
 
 max_debuffs = 16
 debug = False
 debuff_list = []
+encounter_start_data = []
 last_timestamp = 0
 last_push_off_timestamp = 0
-stacking_debuff_list = ["Armor Shatter",
-                        "Curse of Elements",
-                        "Curse of Shadow",
-                        "Curse of Recklessness",
-                        "Deep Wound", 
-                        "Demoralizing Shout",
-                        "Gift of Arthas",
-                        "Hunter's Mark",
-                        "Shadow Vulnerability",
-                        "Sunder Armor",
-                        "Winter's Chill"]
-precast_debuff_list = ["Hunter's Mark"]
+
+valid_event_list = ["SPELL_AURA_APPLIED",
+                    "SPELL_AURA_APPLIED_DOSE",
+                    "SPELL_AURA_REMOVED",
+                    "SPELL_AURA_REFRESH",
+                    "ENCOUNTER_START",
+                    "ENCOUNTER_END"]
+valid_encounter_list = ["Lucifron",
+                        "Magmadar",
+                        "Gehennas",
+                        "Garr",
+                        "Baron Geddon",
+                        "Shazzrah",
+                        "Sulfuron Harbinger",
+                        "Golemagg the Incinerator",
+                        "Majordomo Executus",
+                        "Ragnaros"
+                        "Razorgore",
+                        "Vaelastraz the Corrupted",
+                        "Broodlord Lashlayer",
+                        "Firemaw",
+                        "Ebonroc",
+                        "Flamegor",
+                        "Chromaggus",
+                        "Nefarian"]
+
 debuff_durations_list = [
-    {"name": "Armor Shatter", "duration": 45},
-    {"name": "Corruption", "duration": 12},
-    {"name": "Curse of Agony", "duration": 24},
-    {"name": "Curse of the Elements", "duration": 300},
-    {"name": "Curse of Recklessness", "duration": 120},
-    {"name": "Curse of Shadow", "duration": 300},
-    {"name": "Curse of Tongues", "duration": 30},
-    {"name": "Deep Wound", "duration": 12},
-    {"name": "Demoralizing Shout", "duration": 30},
-    {"name": "Faerie Fire (Feral)", "duration": 40},
-    {"name": "Faerie Fire", "duration": 40},
-    {"name": "Gift of Arthas", "duration": 180},
-    {"name": "Hunter's Mark", "duration": 120},
-    {"name": "Judgement of Light", "duration": 20},
-    {"name": "Judgement of Wisdom", "duration": 20},
-    {"name": "Screech", "duration": 4},
-    {"name": "Siphon Life", "duration": 30},
-    {"name": "Shadow Vulnerability", "duration": 12},
-    {"name": "Shadow Weaving", "duration": 15},
-    {"name": "Sunder Armor", "duration": 30},
-    {"name": "Thunderfury", "duration": 12},
-    {"name": "Winter's Chill", "duration": 15}
+    {"debuff": "Armor Shatter", "duration": 45},
+    {"debuff": "Corruption", "duration": 12},
+    {"debuff": "Curse of Agony", "duration": 24},
+    {"debuff": "Curse of the Elements", "duration": 300},
+    {"debuff": "Curse of Recklessness", "duration": 120},
+    {"debuff": "Curse of Shadow", "duration": 300},
+    {"debuff": "Curse of Tongues", "duration": 30},
+    {"debuff": "Deaden Magic", "duration": 30},
+    {"debuff": "Deadly Poison IV", "duration": 12},
+    {"debuff": "Deep Wound", "duration": 12},
+    {"debuff": "Demoralizing Shout", "duration": 30},
+    {"debuff": "Drain Soul", "duration": 15},
+    {"debuff": "Faerie Fire (Feral)", "duration": 40},
+    {"debuff": "Faerie Fire", "duration": 40},
+    {"debuff": "Flare", "duration": 30},
+    {"debuff": "Gift of Arthas", "duration": 180},
+    {"debuff": "Hunter's Mark", "duration": 120},
+    {"debuff": "Inferno", "duration": 2},
+    {"debuff": "Inspire", "duration": 10},
+    {"debuff": "Judgement of Light", "duration": 20},
+    {"debuff": "Judgement of Wisdom", "duration": 20},
+    {"debuff": "Rip", "duration": 12},
+    {"debuff": "Screech", "duration": 4},
+    {"debuff": "Shadowburn", "duration": 5},
+    {"debuff": "Siphon Life", "duration": 30},
+    {"debuff": "Shadow Vulnerability", "duration": 12},
+    {"debuff": "Shadow Weaving", "duration": 15},
+    {"debuff": "Sunder Armor", "duration": 30},
+    {"debuff": "Taunt", "duration": 3},
+    {"debuff": "Thunderfury", "duration": 12},
+    {"debuff": "Winter's Chill", "duration": 15}
 ]
 
 """
@@ -61,77 +84,47 @@ debuff_durations_list = [
 
 """
 
-def convert_to_seconds(raw_timestamp):
-    word = raw_timestamp.split(':', 3)
-    time = float(word[0]) * 60 * 60
-    time += float(word[1]) * 60
-    time += float(word[2])
-    return (time)
+def short_event_str(event_type):
+    if (event_type == "SPELL_AURA_APPLIED"):
+        return "applied"
+    elif (event_type == "SPELL_AURA_REMOVED"):
+        return "removed"
+    elif (event_type == "SPELL_AURA_REFRESH"):
+        return "refresh"
+    elif (event_type == "ENCOUNTER_START"):
+        return "start"
+    elif (event_type == "ENCOUNTER_END"):
+        return "end"
 
-def get_event_type(raw_event):
-    if (re.search("is afflicted by", raw_event)):
-        return("add")
-    elif (re.search("is refreshed by", raw_event)):
-        return("refresh")
-    elif (re.search("\A[\D]+ fades from", raw_event)):
-        return("delete")
-    return("skip")
+def event_is_applied(event_type):
+    if (event_type == "SPELL_AURA_APPLIED"):
+        return True
+    return False
 
-def event_is_add(event_type):
-    if (event_type == "add"):
+def event_is_applied_dose(event_type):
+    if (event_type == "SPELL_AURA_APPLIED_DOSE"):
+        return True
+    return False
+
+def event_is_removed(event_type):
+    if (event_type == "SPELL_AURA_REMOVED"):
         return True
     return False
 
 def event_is_refresh(event_type):
-    if (event_type == "refresh"):
+    if (event_type == "SPELL_AURA_REFRESH"):
         return True
     return False
 
-def event_is_delete(event_type):
-    if (event_type == "delete"):
+def event_is_start(event_type):
+    if (event_type == "ENCOUNTER_START"):
         return True
     return False
 
-def event_is_skip(event_type):
-    if (event_type == "skip"):
+def event_is_end(event_type):
+    if (event_type == "ENCOUNTER_END"):
         return True
     return False
-
-def get_event_target(raw_event, event_type):
-    if (event_is_add(event_type)):
-        m = re.match(r"(.*) is afflicted by", raw_event)
-        event_target = m.group(1)
-    elif (event_is_refresh(event_type)):
-        m = re.match(r"(.*)'s", raw_event)
-        event_target = m.group(1)
-    elif (event_is_delete(event_type)):
-        m = re.match(r"(.*) fades from (.*)", raw_event)
-        event_target = m.group(2)
-    return event_target
-
-def get_event_source(raw_event, event_type):
-    if (event_is_add(event_type)):
-        m = re.match(r"(.*) from +(\S.*)", raw_event)
-        event_source = m.group(2)
-    elif (event_is_refresh(event_type)):
-        m = re.match(r"(.*) is refreshed by +(\S.+)", raw_event)
-        event_source = m.group(2)
-    elif (event_is_delete(event_type)):
-        m = re.match(r"([^']*)'s", raw_event)
-        event_source = m.group(1)
-    return event_source
-
-def get_event_debuff(raw_event, event_type):
-    if (event_is_add(event_type)):
-        m = re.match(r".* is afflicted by  (\S[\D\(\)]+\S) +(\(\d+\))? +from", raw_event)
-        event_debuff = m.group(1)
-    elif (event_is_refresh(event_type)):
-        m = re.match(r"(.*)'s (.*)  is refreshed by", raw_event)
-        event_debuff = m.group(2)
-    elif (event_is_delete(event_type)):
-        m = re.match(r"\A([^']*)'s (.*)  fades from", raw_event)
-        event_debuff = m.group(2)
-    return event_debuff
 
 def is_stacking_debuff(debuff_type):
     if debuff_type in stacking_debuff_list:
@@ -142,129 +135,148 @@ def handle_debuff(event):
     global debuff_list
     # since there can be more than one target in a log, the debuff list is actually a list of lists
     if not debuff_list:
+        print("=============================================================================")
         print("Init list with new target " + event["target"])
+        print("=============================================================================")
         d = {"target" : event["target"], "debuffs" : []}
         d_copy = d.copy()
         debuff_list.append(d_copy)
     elif not (next((item for item in debuff_list if item["target"] == event["target"]), False)):
+        print("=============================================================================")
         print("Adding target " + event["target"])
+        print("=============================================================================")
         d = {"target" : event["target"], "debuffs" : []}
         d_copy = d.copy()
         debuff_list.append(d_copy)
     else:
         d = next((item for item in debuff_list if item["target"] == event["target"]))
 
-    # non-stacking debuffs should be treated like refreshes
-    if ((event_is_add(event["type"])) and not (is_stacking_debuff(event["debuff"]))):
-        new_debuff = {"start_time" : event["time"], "name" : event["debuff"], "source" : event["source"]}
-        new_debuff_copy = new_debuff.copy()
-        d["debuffs"].append(new_debuff_copy)
-    elif ((event_is_add(event["type"])) and (is_stacking_debuff(event["debuff"]))):
-        # search for an existing debuff to refresh
+    if (event_is_applied(event["type"])):
         found = False
         for i in d["debuffs"]:
-            # if it already exists, just refresh it
-            if (i["name"] == event["debuff"]):
-                i["start_time"] = event["time"]
-                found = True
-                event["type"] = "refresh"
-        if not (found):
-            new_debuff = {"start_time" : event["time"], "name" : event["debuff"], "source" : event["source"]}
-            new_debuff_copy = new_debuff.copy()
-            d["debuffs"].append(new_debuff_copy)
-    elif ((event_is_refresh(event["type"]))):
-        # find the matching debuff in the list and update the start_time
-        found = False
-        for i in d["debuffs"]:
-            if (i["name"] == event["debuff"]):
-                i["start_time"] = event["time"]
+            if ((i["debuff"] == event["debuff"]) and (i["source"] == event["source"])):
+                print("WARNING: Duplicate apply with no remove:")
+                i["time"] = event["time"]
                 found = True
         if not (found):
-            new_debuff = {"start_time" : event["time"], "name" : event["debuff"], "source" : event["source"]}
+            new_debuff = {"time" : event["time"], "debuff" : event["debuff"], "source" : event["source"]}
             new_debuff_copy = new_debuff.copy()
             d["debuffs"].append(new_debuff_copy)
-            event["type"] = "add"
-    elif (event_is_delete(event["type"])):
-        # find the matching debuff in the list and update the start_time
+    elif (event_is_refresh(event["type"])):
+        # find the matching debuff in the list and update the start time
         found = False
         for i in d["debuffs"]:
-            if (is_stacking_debuff(event["debuff"])):
-                if (i["name"] == event["debuff"]):
-                    d["debuffs"].remove(i)
-                    found = True
-                    break
-            else:
-                if ((i["name"] == event["debuff"]) and (i["source"] == event["source"])):
-                    d["debuffs"].remove(i)
-                    found = True
-                    break
-        if not (found) and not (is_stacking_debuff(event["debuff"])):
-            print ("Error: Delete with no existing debuff:")
+            if ((i["debuff"] == event["debuff"]) and (i["source"] == event["source"])):
+                i["time"] = event["time"]
+                found = True
+        if not (found):
+            new_debuff = {"time" : event["time"], "debuff" : event["debuff"], "source" : event["source"]}
+            new_debuff_copy = new_debuff.copy()
+            d["debuffs"].append(new_debuff_copy)
+    elif (event_is_removed(event["type"])):
+        # find the matching debuff in the list and update the start time
+        found = False
+        for i in d["debuffs"]:
+            if ((i["debuff"] == event["debuff"]) and (i["source"] == event["source"])):
+                d["debuffs"].remove(i)
+                found = True
+                break
+        if not (found):
+            print ("WARNING: Delete with no existing debuff:")
   
-    if (event["type"] == "refresh"):
-        print("EVENT: {:6.3f}: ".format(event["time"]) + event["type"] + " " + event["debuff"] + " on " + event["target"] + " from " + event["source"])
+    if (event_is_refresh(event["type"])):
+        print("{:6.3f}: ".format(event["time"]) + short_event_str(event["type"]) + " " + event["debuff"] + " on " + event["target"] + " from " + event["source"])
     else:
-        print("EVENT: {:6.3f}: ".format(event["time"]) + event["type"] + " " + event["debuff"] + " on " + event["target"] + " from " + event["source"] + " (" + str(len(d["debuffs"])) + " debuffs)")
+        print("{:6.3f}: ".format(event["time"]) + short_event_str(event["type"]) + " " + event["debuff"] + " on " + event["target"] + " from " + event["source"] + " (" + str(len(d["debuffs"])) + " debuffs)")
+
+def keep_entry(event):
+    # is the event type is something we care about?
+    if event[1] not in valid_event_list:
+        return False
+    # is the target of this event a boss?
+    if ((event[1] != "ENCOUNTER_START") and (event[1] != "ENCOUNTER_END")):
+        if (event[7] not in valid_encounter_list):
+            return False
+    return True
 
 def parse_file(file):
     # parse to a list of lists
     print("Parsing file")
 
-    reader = csv.reader(file)
-    list_of_rows = list(reader)
-    return (list_of_rows)
+    line = file.readline()
+    raw_data = []
 
-def find_precast_debuffs(debuff_data):
-    # right now this is only Hunter's Mark, but it's possible that a debuff already exists before the log starts (ie. pre-combat)
-    # only do this if there's no add
-    for i in debuff_data:
-        if (i["debuff"] in precast_debuff_list):
-            # if the first event is a remove, then we need to push an add to the start
-            if (i["type"] == "delete"):
-                print("Adjusting precast list")
-                event_time = 0
-                event_type = "add"
-                event_target = i["target"]
-                event_source = i["source"]
-                event_debuff = i["debuff"]
-                if (debug):
-                    print(str(event_time) + ": " + event_type + " " + event_debuff + " on " + event_target + " from " + event_source)
-                    pass
-                d = {"time" : event_time, "type" : event_type, "debuff" : event_debuff, "target" : event_target, "source" : event_source}
-                d_copy = d.copy()
-                debuff_data.insert(0, d_copy)
-                break
+    while line:
+        # replace the double-whitespace delimiter with a comma
+        line = re.sub('  ',',', line)
+        line = re.sub('\"','', line)
+        event = re.split(r',', line)
+        # get rid of anything we don't care about
+        if (keep_entry(event)):
+            raw_data.append(event)
 
-    return (debuff_data)
+        line = file.readline()
+
+    if (debug):
+        pp = pprint.PrettyPrinter(indent=4)
+        pp.pprint(raw_data)
+    return (raw_data)
 
 def parse_raw_data(raw_data):
-    # We need to split the 2 columns (time and event) into all the components:
+    global encouter_start_data
+    # We need to split the columns into all the components:
     # - timestamp
     # - add/delete/refresh
     # - target
     # - source
     # - debuff
+
+    # it's inefficient, but we'll cycle the list twice to build the start times first
+    for l in raw_data:
+        if (event_is_start(l[1])):
+            t = re.split(' |/|:|\.', l[0])
+            start = datetime.datetime(2020, int(t[0]), int(t[1]), int(t[2]), int(t[3]), int(t[4]), int(t[5]) * 1000)
+            d = {"debuff" : l[3], "start" : start}
+            d_copy = d.copy()
+            encounter_start_data.append(d_copy)
+            print(d)
+
     debuff_data = []
     for l in raw_data:
-        if not (l[0] == "Time"):
-            event_type = get_event_type(l[1])
-            if not (event_is_skip(event_type)):
-                event_time = convert_to_seconds(l[0])
-                event_target = get_event_target(l[1], event_type)
-                event_source = get_event_source(l[1], event_type)
-                event_debuff = get_event_debuff(l[1], event_type)
-                if (debug):
-                    print(str(event_time) + ": " + event_type + " " + event_debuff + " on " + event_target + " from " + event_source)
-                    pass
-                d = {"time" : event_time, "type" : event_type, "debuff" : event_debuff, "target" : event_target, "source" : event_source}
-                d_copy = d.copy()
-                debuff_data.append(d_copy)
+        event_type = l[1]
+
+        if (event_is_applied_dose(event_type)):
+            event_type = "SPELL_AURA_REFRESH"
+
+        if ((event_is_start(l[1])) or (event_is_end(l[1]))):
+            continue
+
+        # the tricky part is we want to split this up per-encounter and start the timer
+        # at the start of an encounter
+        t = re.split(' |/|:|\.', l[0])
+        absolute_time = datetime.datetime(2020, int(t[0]), int(t[1]), int(t[2]), int(t[3]), int(t[4]), int(t[5]) * 1000)
+        # the timestamp is relative to the start of the encounter in seconds
+        d = next(item for item in encounter_start_data if item["debuff"] == l[7])
+        difference = absolute_time - d["start"]
+        event_time = difference.total_seconds()
+        event_target = l[7]
+        event_source = l[3]
+        event_debuff = l[11]
+        if (debug):
+            print(str(event_time) + ": " + short_event_str(event_type) + " " + event_debuff + " on " + event_target + " from " + event_source)
+            pass
+        d = {"time" : event_time, "type" : event_type, "debuff" : event_debuff, "target" : event_target, "source" : event_source}
+        d_copy = d.copy()
+        debuff_data.append(d_copy)
     
     return (debuff_data)
 
 def get_debuff_duration(debuff_name):
     global debuff_durations_list
-    i = next(item for item in debuff_durations_list if item["name"] == debuff_name)
+    try:
+        i = next(item for item in debuff_durations_list if item["debuff"] == debuff_name)
+    except:
+        print(debuff_name + " is not in the debuff list.")
     return (i["duration"])
 
 def dump_at_timestamp(debuff_data, event):
@@ -283,13 +295,13 @@ def dump_at_timestamp(debuff_data, event):
     print("Events at current timestamp:")
     for i in debuff_data:
         if ((i["time"] == event["time"]) and (i["target"] == event["target"])):
-            print(" " + i["type"] + " " + i["debuff"] + " on " + i["target"] + " from " + i["source"])
+            print(" " + short_event_str(i["type"]) + " " + i["debuff"] + " on " + i["target"] + " from " + i["source"])
 
     print("Debuffs before timestamp: " + str(len(d["debuffs"])))
 
     for i in d["debuffs"]:
-        remaining_time = get_debuff_duration(i["name"]) + i["start_time"] - event["time"]
-        print(" " + i["name"] + " from " + i["source"] + " (added: {:.3f}".format(i["start_time"]) + ", estimated remaining: {:.3f}".format(remaining_time) + ")")
+        remaining_time = get_debuff_duration(i["debuff"]) + i["time"] - event["time"]
+        print(" " + i["debuff"] + " from " + i["source"] + " (added: {:.3f}".format(i["time"]) + ", estimated remaining: {:.3f}".format(remaining_time) + ")")
     print("---------------------------------------------------")
 
 def handle_push_off(debuff_data, event):
@@ -306,9 +318,9 @@ def handle_push_off(debuff_data, event):
     # if we have both, then one buff has pushed another off
     for i in debuff_data:
         if (i["time"] == event["time"]):
-            if (event_is_delete(i["type"])):
+            if (event_is_removed(i["type"])):
                 delete_found = True
-            elif (event_is_add(i["type"])):
+            elif (event_is_applied(i["type"])):
                 add_found = True
             elif (event_is_refresh(i["type"])):
                 add_found = True
@@ -361,13 +373,11 @@ def main():
 
     print(args)
 
-    with open(args.file) as file:
+    with open(args.file, encoding="utf8") as file:
         # parse input file and return a list of lists
         raw_data = parse_file(file)
 
         debuff_data = parse_raw_data(raw_data)
-
-        debuff_data = find_precast_debuffs(debuff_data)
 
         # walk debuffs
         walk_debuffs(debuff_data)
