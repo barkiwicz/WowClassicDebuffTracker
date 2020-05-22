@@ -202,15 +202,9 @@ def handle_debuff(event):
             print ("Error: Delete with no existing debuff:")
   
     if (event["type"] == "refresh"):
-        print("{:6.3f}: ".format(event["time"]) + event["type"] + " " + event["debuff"] + " on " + event["target"] + " from " + event["source"])
+        print("EVENT: {:6.3f}: ".format(event["time"]) + event["type"] + " " + event["debuff"] + " on " + event["target"] + " from " + event["source"])
     else:
-        print("{:6.3f}: ".format(event["time"]) + event["type"] + " " + event["debuff"] + " on " + event["target"] + " from " + event["source"] + " (" + str(len(d["debuffs"])) + " debuffs)")
-        # pp = pprint.PrettyPrinter(indent=4)
-        # pp.pprint(d)
-
-    #if (len(d["debuffs"]) == max_debuffs):
-    #    pp = pprint.PrettyPrinter(indent=4)
-    #    pp.pprint(d["debuffs"])
+        print("EVENT: {:6.3f}: ".format(event["time"]) + event["type"] + " " + event["debuff"] + " on " + event["target"] + " from " + event["source"] + " (" + str(len(d["debuffs"])) + " debuffs)")
 
 def parse_file(file):
     # parse to a list of lists
@@ -234,7 +228,7 @@ def find_precast_debuffs(debuff_data):
                 event_source = i["source"]
                 event_debuff = i["debuff"]
                 if (debug):
-                    #print(str(event_time) + ": " + event_type + " " + event_debuff + " on " + event_target + " from " + event_source)
+                    print(str(event_time) + ": " + event_type + " " + event_debuff + " on " + event_target + " from " + event_source)
                     pass
                 d = {"time" : event_time, "type" : event_type, "debuff" : event_debuff, "target" : event_target, "source" : event_source}
                 d_copy = d.copy()
@@ -260,7 +254,7 @@ def parse_raw_data(raw_data):
                 event_source = get_event_source(l[1], event_type)
                 event_debuff = get_event_debuff(l[1], event_type)
                 if (debug):
-                    #print(str(event_time) + ": " + event_type + " " + event_debuff + " on " + event_target + " from " + event_source)
+                    print(str(event_time) + ": " + event_type + " " + event_debuff + " on " + event_target + " from " + event_source)
                     pass
                 d = {"time" : event_time, "type" : event_type, "debuff" : event_debuff, "target" : event_target, "source" : event_source}
                 d_copy = d.copy()
