@@ -44,7 +44,7 @@ valid_encounter_list = ["Lucifron",
 
 debuff_durations_list = [
     {"debuff": "Armor Shatter", "duration": 45},
-    {"debuff": "Corruption", "duration": 12},
+    {"debuff": "Corruption", "duration": 18},
     {"debuff": "Curse of Agony", "duration": 24},
     {"debuff": "Curse of the Elements", "duration": 300},
     {"debuff": "Curse of Recklessness", "duration": 120},
@@ -136,14 +136,14 @@ def handle_debuff(event):
     # since there can be more than one target in a log, the debuff list is actually a list of lists
     if not debuff_list:
         print("=============================================================================")
-        print("Init list with new target " + event["target"])
+        print("Encounter: " + event["target"])
         print("=============================================================================")
         d = {"target" : event["target"], "debuffs" : []}
         d_copy = d.copy()
         debuff_list.append(d_copy)
     elif not (next((item for item in debuff_list if item["target"] == event["target"]), False)):
         print("=============================================================================")
-        print("Adding target " + event["target"])
+        print("Encounter: " + event["target"])
         print("=============================================================================")
         d = {"target" : event["target"], "debuffs" : []}
         d_copy = d.copy()
@@ -186,8 +186,10 @@ def handle_debuff(event):
   
     if (event_is_refresh(event["type"])):
         print("{:6.3f}: ".format(event["time"]) + short_event_str(event["type"]) + " " + event["debuff"] + " on " + event["target"] + " from " + event["source"])
+        pass
     else:
         print("{:6.3f}: ".format(event["time"]) + short_event_str(event["type"]) + " " + event["debuff"] + " on " + event["target"] + " from " + event["source"] + " (" + str(len(d["debuffs"])) + " debuffs)")
+        pass
 
 def keep_entry(event):
     # is the event type is something we care about?
@@ -232,6 +234,7 @@ def parse_raw_data(raw_data):
     # - debuff
 
     # it's inefficient, but we'll cycle the list twice to build the start times first
+    print("Encounters in log:")
     for l in raw_data:
         if (event_is_start(l[1])):
             t = re.split(' |/|:|\.', l[0])
@@ -239,7 +242,8 @@ def parse_raw_data(raw_data):
             d = {"debuff" : l[3], "start" : start}
             d_copy = d.copy()
             encounter_start_data.append(d_copy)
-            print(d)
+            print(d["debuff"] + " : ")
+            print(start)
 
     debuff_data = []
     for l in raw_data:
@@ -290,7 +294,7 @@ def dump_at_timestamp(debuff_data, event):
 
     d = next((item for item in debuff_list if item["target"] == event["target"]))
 
-    print("---------------------------------------------------")
+    print("-----------------------------------------------------------------------------")
     print("Debuff pushed off at " + str(event["time"]))
     print("Events at current timestamp:")
     for i in debuff_data:
@@ -302,7 +306,7 @@ def dump_at_timestamp(debuff_data, event):
     for i in d["debuffs"]:
         remaining_time = get_debuff_duration(i["debuff"]) + i["time"] - event["time"]
         print(" " + i["debuff"] + " from " + i["source"] + " (added: {:.3f}".format(i["time"]) + ", estimated remaining: {:.3f}".format(remaining_time) + ")")
-    print("---------------------------------------------------")
+    print("-----------------------------------------------------------------------------")
 
 def handle_push_off(debuff_data, event):
     global last_push_off_timestamp
@@ -317,7 +321,7 @@ def handle_push_off(debuff_data, event):
     # search the entries at the current timestamp to see if we have both a delete and add/refresh
     # if we have both, then one buff has pushed another off
     for i in debuff_data:
-        if (i["time"] == event["time"]):
+        if ((i["time"] == event["time"]) and (i["target"] == event["target"])):
             if (event_is_removed(i["type"])):
                 delete_found = True
             elif (event_is_applied(i["type"])):
